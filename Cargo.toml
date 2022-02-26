@@ -1,10 +1,14 @@
 [package]
 name = "poke"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-license = "MIT OR Apache-2.0"
-description = "Soon to be touch-like cli app."
+license-file = "LICENSE"
+description = "A Simple program that aims to replicate the functionality of touch, and expand on it."
+repository = "https://github.com/neinteen/poke"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = "3.1.0"
+filetime = "0.2.15"
+thiserror = "1.0.30"
