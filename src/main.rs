@@ -3,179 +3,105 @@ mod helpers;
 
 pub use error::Error;
 
-use clap::{Arg, ArgMatches, Command};
+use clap::{AppSettings, Parser};
 use filetime::FileTime;
 use helpers::*;
 
-use std::{env, fs, path::PathBuf, time};
+use std::{env, fs, time};
 
-#[derive(Debug)]
-pub(crate) struct Config {
-    pub bin: bool,
-    pub no_create: bool,
-    pub a_time: bool,
-    pub m_time: bool,
-    pub ref_time: Option<(FileTime, FileTime)>,
-    pub files: Vec<String>,
-    pub current_dir: PathBuf,
+#[derive(Debug, Parser)]
+#[clap(name = "Poke")]
+#[clap(author = "neinteen")]
+#[clap(setting = AppSettings::ArgRequiredElseHelp)]
+/// A Simple program that aims to replicate the functionality of touch, and expand on it.
+pub struct Poke {
+    /// change only the access time.
+    #[clap(short)]
+    pub(crate) access_time: bool,
+    /// delete given files.
+    #[clap(short,
+        conflicts_with_all = &["access-time", "no-create", "date", "modification-time", "reference-file", "timestamp"])]
+    pub(crate) bin: bool,
+    /// don't create new file, if the given file wasn't found.
+    #[clap(short = 'c', long)]
+    pub(crate) no_create: bool,
+    /// use this time string instead of current time. (coming in 0.1.3)
+    #[clap(short, long, conflicts_with_all = &["reference-file", "timestamp"])]
+    pub(crate) date: Option<String>,
+    /// change only the modification time.
+    #[clap(short)]
+    pub(crate) modification_time: bool,
+    /// use this files time, instead of current time. (coming in 0.1.3)
+    #[clap(short, long, conflicts_with_all = &["date", "timestamp"])]
+    pub(crate) reference_file: Option<String>,
+    /// use this timestamp, instead of current time. (coming in 0.1.3)
+    #[clap(short, long, conflicts_with_all = &["date", "reference-file"])]
+    pub(crate) timestamp: Option<String>,
+    /// single or multiple files.
+    #[clap(required = true)]
+    pub(crate) files: Vec<String>,
 }
-impl TryFrom<ArgMatches> for Config {
-    type Error = crate::Error;
-
-    fn try_from(args: ArgMatches) -> Result<Self, Error> {
-        let bin = args.is_present("bin");
-        let no_create = args.is_present("no_create");
-        let a_time = args.is_present("access_time");
-        let m_time = args.is_present("modification_time");
-        let current_dir = env::current_dir()?;
-        // TODO: touch -t normally only changes the modification and access times.
-        // It only changes the creation time if the target time is before the original creation time.
-        let ref_time = if let Some(f) = args.value_of("reference_file") {
-            Some(get_ref_file_times(current_dir.join(f))?)
-        } else {
-            None
-        };
-        // NOTE: This unwrap is safe since files can't be empty.
-        // Should still be replaced.
-        let files = args
-            .values_of("files")
-            .unwrap()
-            .into_iter()
-            .map(|f| f.into())
-            .collect();
-
-        Ok(Self {
-            bin,
-            no_create,
-            a_time,
-            m_time,
-            ref_time,
-            files,
-            current_dir,
-        })
-    }
-}
-impl Config {
+impl Poke {
     pub fn run(self) -> Result<(), Error> {
-        self.files.iter().try_for_each(|f| poke(&f, &self))?;
+        let current_dir = env::current_dir()?;
+        let timestamp = if let Some(f) = &self.reference_file {
+            get_ref_file_times(current_dir.join(f))?
+        } else {
+            let now = FileTime::from_system_time(time::SystemTime::now());
+            (now, now)
+        };
+
+        for file in self.files {
+            file_name_is_legal(&file)?;
+            let path = current_dir.join(file);
+
+            if self.bin {
+                delete_file(path.as_path())?;
+                return Ok(());
+            }
+
+            if !file_exists(path.as_path())? {
+                if self.no_create {
+                    println!(
+                        "The specified file doesn't exist but the --no-create flag was passed."
+                    );
+                    return Ok(());
+                }
+                fs::File::create(&path)?;
+
+                if self.date.is_none() && self.reference_file.is_none() && self.timestamp.is_none()
+                {
+                    return Ok(());
+                }
+            }
+
+            let handle = fs::OpenOptions::new().write(true).open(path.as_path())?;
+            filetime::set_file_handle_times(
+                &handle,
+                if !self.modification_time {
+                    Some(timestamp.0)
+                } else {
+                    None
+                },
+                if !self.access_time {
+                    Some(timestamp.1)
+                } else {
+                    None
+                },
+            )?;
+        }
         Ok(())
     }
 }
+// TODO: VERSION 0.1.3
+// FIXME: Access Time not working. Generally times are acting strange. Consider writing own crate or switching.
+// TODO: Implement the 3 missing features.
+
+// TODO: FUTURE VERSIONS
+// TODO: Move files command
+// TODO: support ../this/syntax
 fn main() {
-    let args = Command::new("poke")
-        .version("v0.1.1")
-        .author("neinteen")
-        .about("Touch-like application mainly used for creating files quickly on windows")
-        .arg(
-            Arg::new("bin")
-                .short('b')
-                .help("deletes files. incompatible with any other command.")
-                .conflicts_with_all(&[
-                    "access_time",
-                    "no_create",
-                    "date_string",
-                    "modification_time",
-                    "reference_file",
-                ])
-                .takes_value(false),
-        )
-        .arg(
-            Arg::new("access_time")
-                .short('a')
-                .help("change only access time.")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::new("no_create")
-                .long("no-create")
-                .short('c')
-                .help("do not create any files.")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::new("date_string")
-                .long("date")
-                .short('d')
-                .help("parse time string and use it instead of current time. (NOT IMPLEMENTED)")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::new("modification_time")
-                .short('m')
-                .help("change only modification time.")
-                .conflicts_with("access_time")
-                .takes_value(false),
-        )
-        .arg(
-            Arg::new("reference_file")
-                .long("reference")
-                .short('r')
-                .help("use this file's times instead of current time.")
-                .conflicts_with("date_string")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::new("files")
-                .multiple_occurrences(true)
-                .value_delimiter(' ')
-                .required(true),
-        )
-        .arg_required_else_help(true)
-        .get_matches();
-
-    match Config::try_from(args) {
-        Ok(cfg) => {
-            if let Err(e) = cfg.run() {
-                println!("{e}")
-            }
-        }
-        Err(e) => {
-            println!("Error parsing arguments: {e}")
-        }
+    if let Err(e) = Poke::parse().run() {
+        println!("{e}");
     }
-}
-
-fn poke(file: &str, cfg: &Config) -> Result<(), Error> {
-    file_name_is_legal(file)?;
-    let path = cfg.current_dir.join(file);
-    if cfg.bin {
-        delete_file(path.as_path())?;
-        return Ok(());
-    }
-
-    let exists = file_exists(path.as_path())?;
-
-    if !exists {
-        if cfg.no_create {
-            println!("The specified file doesn't exist but the --no-create flag was passed.");
-            return Ok(());
-        }
-        fs::File::create(&path)?;
-
-        if cfg.ref_time.is_none()
-        /* && Time string none */
-        {
-            return Ok(());
-        }
-    }
-
-    let a_time: FileTime;
-    let m_time: FileTime;
-
-    if let Some(ref_time) = cfg.ref_time {
-        a_time = ref_time.0;
-        m_time = ref_time.1;
-    } else {
-        let now = FileTime::from_system_time(time::SystemTime::now());
-        a_time = now.clone();
-        m_time = now;
-    }
-
-    let handle = fs::OpenOptions::new().write(true).open(path.as_path())?;
-    filetime::set_file_handle_times(
-        &handle,
-        if !cfg.m_time { Some(a_time) } else { None },
-        if !cfg.a_time { Some(m_time) } else { None },
-    )?;
-    Ok(())
 }

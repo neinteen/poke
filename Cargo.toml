@@ -9,6 +9,6 @@ repository = "https://github.com/neinteen/poke"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "3.1.0"
+clap = { version = "3.1.0", features = ["derive"] }
 filetime = "0.2.15"
 thiserror = "1.0.30"

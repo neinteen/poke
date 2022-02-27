@@ -37,7 +37,9 @@ pub fn get_ref_file_times(path: impl AsRef<Path>) -> Result<(FileTime, FileTime)
         )),
         Err(e) => {
             if e.kind() == io::ErrorKind::NotFound {
-                Err(crate::Error::FileNotFound("".to_string()))
+                Err(crate::Error::FileNotFound(
+                    path.as_ref().to_string_lossy().to_string(),
+                ))
             } else {
                 Err(e.into())
             }
