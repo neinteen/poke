@@ -2,42 +2,45 @@
 
 ### Description
 
-A Simple program that aims to replicate the functionality of [touch](https://en.wikipedia.org/wiki/Touch_(command)), and expand on it.
-
-Thanks to all crates used for saving me a whole lot of time.
+Inspired by the classic [touch](https://en.wikipedia.org/wiki/Touch_(command)) command.
 
 Please take a look at the [ROADMAP](https://github.com/neinteen/poke/issues/1) to understand more about what this project is going to be,
 and which features are currently working.
+
+Thanks to all crates used for saving me a whole lot of time.
+* [clap](https://crates.io/crates/clap)
+* [filetime](https://crates.io/crates/filetime)
+* [thiserror](https://crates.io/crates/thiserror)
+* [chrono](https://crates.io/crates/chrono)
+* [chrono_english](https://crates.io/crates/chrono_english)
 
 ### Installation
 
 `cargo install --force poke`
 
-### Commands
+### Usage
 
 ```rust
-Poke 
-neinteen
-A Simple program that aims to replicate the functionality of touch, and expand on it
-
 USAGE:
     poke.exe [OPTIONS] <FILES>...
 
 ARGS:
-    <FILES>...    single or multiple files
+    <FILES>...    the file(s) to be modified
 
 OPTIONS:
     -a
             change only the access time
 
     -b
-            delete given files
+            delete given file(s)
 
     -c, --no-create
-            don't create new file, if the given file wasn't found
+            if not found, don't create new file(s)
 
     -d, --date <DATE>
-            use this time string instead of current time.
+            use this date string instead of current time. The Supported formats are: "1/01/2001
+            00:00", "1 jan(uary) 2001 0am", "last friday 2pm" and so on. for more information:
+            https://crates.io/crates/chrono-english
 
     -h, --help
             Print help information
@@ -46,12 +49,12 @@ OPTIONS:
             change only the modification time
 
     -r, --reference-file <REFERENCE_FILE>
-            use this files time, instead of current time.
+            use this files time, instead of current time
 
-    -t, --timestamp <TIMESTAMP>
-            use this timestamp, instead of current time.
+    -V, --version
+            Print version information
 ```
 
 ### Compatibility
 
-The current version (0.1.2) is only tested on windows, but should support Linux/Mac OS. In the future I will test Linux builds in a vm.
+The current version (0.1.3) is only tested on windows, but should support Linux/Mac OS. In the future I will test Linux builds in a vm.

@@ -1,42 +1,46 @@
-use std::path::Path;
-use std::{fs, io};
-
+use chrono::Local;
+use chrono_english::{parse_date_string, Dialect::Uk};
 use filetime::FileTime;
+use std::{fs, io::ErrorKind::NotFound, path::Path};
 
-pub fn file_exists(path: impl AsRef<Path>) -> Result<bool, io::Error> {
-    match path.as_ref().metadata() {
-        Ok(_) => Ok(true),
-        Err(e) => {
-            if e.kind() == io::ErrorKind::NotFound {
-                Ok(false)
-            } else {
-                Err(e)
-            }
+use crate::Error;
+
+/// Checks if file exits, but doesn't error if the file wasn't found.
+pub fn file_exists(path: impl AsRef<Path>) -> Result<bool, Error> {
+    if let Err(e) = path.as_ref().metadata() {
+        if e.kind() != NotFound {
+            return Err(e.into());
+        }
+        return Ok(false);
+    }
+    return Ok(true);
+}
+/// Deletes a file, but doesn't error if the file wasn't found.
+pub fn delete_file(path: impl AsRef<Path>) -> Result<(), Error> {
+    if let Err(e) = fs::remove_file(path) {
+        if e.kind() != NotFound {
+            return Err(e.into());
         }
     }
+    Ok(())
 }
 
-pub fn delete_file(path: impl AsRef<Path>) -> Result<(), io::Error> {
-    match fs::remove_file(path) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            if e.kind() == io::ErrorKind::NotFound {
-                Ok(())
-            } else {
-                Err(e)
-            }
-        }
-    }
+/// Parses a chrono_english formatted string into a FileTime.
+pub fn parse_date(date: &str) -> Result<FileTime, Error> {
+    Ok(FileTime::from_system_time(
+        parse_date_string(date, Local::now(), Uk)?.into(),
+    ))
 }
 
-pub fn get_ref_file_times(path: impl AsRef<Path>) -> Result<(FileTime, FileTime), crate::Error> {
+/// Returns the Access and Modification time of a file.
+pub fn get_file_times(path: impl AsRef<Path>) -> Result<(FileTime, FileTime), Error> {
     match fs::metadata(path.as_ref()) {
         Ok(meta) => Ok((
             FileTime::from_last_access_time(&meta),
             FileTime::from_last_modification_time(&meta),
         )),
         Err(e) => {
-            if e.kind() == io::ErrorKind::NotFound {
+            if e.kind() == NotFound {
                 Err(crate::Error::FileNotFound(
                     path.as_ref().to_string_lossy().to_string(),
                 ))
@@ -47,7 +51,8 @@ pub fn get_ref_file_times(path: impl AsRef<Path>) -> Result<(FileTime, FileTime)
     }
 }
 
-pub fn file_name_is_legal(name: &str) -> Result<(), crate::Error> {
+/// Simple check for illegal characters (windows/unix).
+pub fn file_name_is_legal(name: &str) -> Result<(), Error> {
     #[cfg(target_family = "windows")]
     static LEGAL_CHARS: [char; 9] = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
     #[cfg(target_family = "unix")]
